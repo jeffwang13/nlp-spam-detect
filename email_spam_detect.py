@@ -1,5 +1,3 @@
-import pandas as pd
-import numpy as np
 import os
 import email
 import email.policy
@@ -7,6 +5,9 @@ from bs4 import BeautifulSoup
 from collections import Counter
 from nltk import stem
 from nltk.corpus import stopwords
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.metrics import confusion_matrix
+from sklearn import svm
 
 stemmer = stem.SnowballStemmer('english')
 stopwords = set(stopwords.words('english'))
@@ -29,6 +30,8 @@ def html_to_plain(email):
 
 # Removes stopwords, and applies stemmer to words
 def sanitize_email(email_text):
+    if email_text is None:
+        return ''
     email_text = email_text.lower()
 
     email_text = [word for word in email_text.split() if word not in stopwords]
@@ -85,5 +88,20 @@ spam_train_emails = [load_email('input/spam_training', filename=name) for name i
 
 
 ham_train_emails = [sanitize_email(email_to_plain(email)) for email in ham_train_emails]
+ham_test_emails = [sanitize_email(email_to_plain(email)) for email in ham_test_emails]
+spam_train_emails = [sanitize_email(email_to_plain(email)) for email in spam_train_emails]
+spam_test_emails = [sanitize_email(email_to_plain(email)) for email in spam_test_emails]
 
-print(ham_train_emails[1])
+vectorizer = TfidfVectorizer()
+
+ham_train_emails = vectorizer.fit_transform(ham_train_emails)
+ham_test_emails = vectorizer.fit_transform(ham_test_emails)
+spam_train_emails = vectorizer.fit_transform(spam_train_emails)
+spam_test_emails = vectorizer.fit_transform(spam_test_emails)
+
+svm = svm.SVC(C=1000)
+svm.fit(ham_train_emails, spam_train_emails)
+
+X_test = vectorizer.transform(ham_test_emails)
+y_pred = svm.predict(X_test)
+print(confusion_matrix(spam_test_emails, y_pred))
