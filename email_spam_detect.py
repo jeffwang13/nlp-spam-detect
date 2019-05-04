@@ -4,6 +4,7 @@ import os
 import email
 import email.policy
 from bs4 import BeautifulSoup
+from collections import Counter
 from nltk import stem
 from nltk.corpus import stopwords
 
@@ -28,11 +29,47 @@ def html_to_plain(email):
 
 # Removes stopwords, and applies stemmer to words
 def sanitize_email(email_text):
-    email_text = html_to_plain(email_text).lower()
+    email_text = email_text.lower()
 
     email_text = [word for word in email_text.split() if word not in stopwords]
     email_text = " ".join([stemmer.stem(word) for word in email_text])
     return email_text
+
+
+def get_email_structure(email):
+    if isinstance(email, str):
+        return email
+    payload = email.get_payload()
+    if isinstance(payload, list):
+        return "multipart({})".format(", ".join([
+            get_email_structure(sub_email)
+            for sub_email in payload
+        ]))
+    else:
+        return email.get_content_type()
+
+
+def structures_counter(emails):
+    structures = Counter()
+    for email in emails:
+        structure = get_email_structure(email)
+        structures[structure] += 1
+    return structures
+
+
+def email_to_plain(email):
+    for part in email.walk():
+        part_content_type = part.get_content_type()
+        if part_content_type not in ['text/plain','text/html']:
+            continue
+        try:
+            part_content = part.get_content()
+        except: # in case of encoding issues
+            part_content = str(part.get_payload())
+        if part_content_type == 'text/plain':
+            return part_content
+        else:
+            return html_to_plain(part)
 
 
 ham_test_filenames = [name for name in sorted(os.listdir('input/ham_test')) if len(name) > 20]
@@ -46,6 +83,7 @@ ham_train_emails = [load_email('input/ham_training', filename=name) for name in 
 spam_test_emails = [load_email('input/spam_test', filename=name) for name in spam_test_filenames]
 spam_train_emails = [load_email('input/spam_training', filename=name) for name in spam_train_filenames]
 
-ham_test_emails = [sanitize_email(email) for email in ham_test_emails]
 
-print(ham_train_emails[3].get_content())
+ham_train_emails = [sanitize_email(email_to_plain(email)) for email in ham_train_emails]
+
+print(ham_train_emails[1])
